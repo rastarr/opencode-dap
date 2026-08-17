@@ -240,6 +240,30 @@ function truncateOutput(session: DapSession, output: string): void {
 	}
 }
 
+/**
+ * Drain a `runInTerminal` debuggee's stdout into the session output buffer.
+ *
+ * `Bun.spawn` pipes stdout by default and nothing else consumes it; the exposed
+ * stdout stream must be read or Bun buffers it unboundedly in this process
+ * (a chatty debuggee grows the host toward OOM). The reverse-request path has
+ * no terminal surface here, so route the child's stdout through {@link
+ * truncateOutput}: this bounds memory at `MAX_OUTPUT_BYTES` and surfaces the
+ * program's output to the agent, mirroring the adapter's own `output` events.
+ * Runs in the background for the child's lifetime; a killed child or closed pipe
+ * ends the loop quietly.
+ */
+async function drainTerminalStdout(stream: ReadableStream<Uint8Array>, session: DapSession): Promise<void> {
+	const decoder = new TextDecoder();
+	try {
+		for await (const chunk of stream) {
+			truncateOutput(session, decoder.decode(chunk, { stream: true }));
+		}
+		truncateOutput(session, decoder.decode());
+	} catch {
+		// Child killed or pipe closed mid-stream; nothing more to surface.
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Session summary
 // ---------------------------------------------------------------------------
@@ -1127,6 +1151,10 @@ export class DapSessionManager {
 					...env,
 				},
 			});
+			// Consume the child's stdout — Bun pipes it by default and drains
+			// nothing, so an unconsumed stream buffers unboundedly in this
+			// process.
+			void drainTerminalStdout(proc.stdout, session);
 			proc.exited.catch(() => {});
 			return { processId: proc.pid } satisfies DapRunInTerminalResponse;
 		});

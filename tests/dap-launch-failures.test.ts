@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { DapClient } from "../src/client";
+import { DapClient, connectSocket } from "../src/client";
 import { DapSessionManager } from "../src/session";
 import type {
   DapCapabilities,
@@ -327,6 +327,63 @@ describe("DAP launch failure handling", () => {
 
     expect(message).toContain("launch: 'C:\\repo\\program' is not a valid executable");
     expect(message).toContain("configurationDone: Expected process to be stopped.");
+  });
+});
+
+describe("connectSocket unix transport", () => {
+  it("rejects instead of hanging when the unix socket cannot be connected", async () => {
+    // A path that stat would report as a socket but that no one listens on
+    // yields ECONNREFUSED/ENOENT from Bun.connect. Before the fix the error
+    // handler only errored the stream and the returned promise never settled,
+    // so `await connectSocket(...)` hung the launch forever.
+    const deadSocket = path.join(os.tmpdir(), `opencode-dap-dead-${Date.now()}-${Math.random().toString(36).slice(2)}.sock`);
+    const start = Date.now();
+    await expect(connectSocket({ unix: deadSocket }, 5_000)).rejects.toThrow();
+    // Must settle on the connect error, not linger until the timeout bound.
+    expect(Date.now() - start).toBeLessThan(2_000);
+  });
+});
+
+describe("DAP socket spawn cleanup", () => {
+  it("kills the adapter process when the Unix socket never appears (Linux)", async () => {
+    if (process.platform !== "linux") return;
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-dap-unix-leak-"));
+    try {
+      const adapterPath = path.join(cwd, "wedged-unix-adapter.mjs");
+      const pidFilePath = path.join(cwd, "adapter.pid");
+      // Adapter records its pid and stays alive without ever creating the
+      // socket, forcing #spawnSocketUnix's readiness wait to time out.
+      await fs.writeFile(
+        adapterPath,
+        `await Bun.write(${JSON.stringify(pidFilePath)}, String(process.pid));\nawait Bun.sleep(60_000);\n`,
+      );
+      const adapter: DapResolvedAdapter = {
+        ...TEST_ADAPTER,
+        name: "wedged-unix-adapter",
+        command: process.execPath,
+        args: [adapterPath],
+        resolvedCommand: process.execPath,
+        connectMode: "socket",
+      };
+      await expect(DapClient.spawn({ adapter, cwd, socketReadyTimeoutMs: 300 })).rejects.toThrow(
+        /Socket not ready/,
+      );
+      // Real delay required: the kill signal must propagate to the detached
+      // adapter and the pid file must be readable; neither is an event this
+      // test can await, so deterministic time control does not work here.
+      await Bun.sleep(500);
+      const adapterPid = Number(await Bun.file(pidFilePath).text());
+      expect(Number.isFinite(adapterPid)).toBe(true);
+      let alive = true;
+      try {
+        process.kill(adapterPid, 0);
+      } catch {
+        alive = false;
+      }
+      expect(alive).toBe(false);
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
   });
 });
 

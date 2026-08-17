@@ -77,6 +77,53 @@ describe("DAP client — lifecycle", () => {
     expect(client.capabilities).toBeUndefined();
   });
 
+  it("times out promptly and does not emit an unhandled rejection when the stdin flush is wedged", async () => {
+    const procExited = Promise.withResolvers<number>();
+    const proc = {
+      exited: procExited.promise,
+      exitCode: null,
+      stdin: { write: () => 0, flush: () => undefined },
+      stdout: new ReadableStream<Uint8Array>(),
+      stderr: new ReadableStream<Uint8Array>(),
+      kill: () => {
+        procExited.resolve(-1);
+        return true;
+      },
+    } as unknown as Bun.Subprocess<"pipe">;
+    // flush() returns a promise that never resolves — models an adapter whose
+    // stdin has stopped draining (the failure mode in OMP issue #4233).
+    const writeSink = {
+      write: (_data: string | Uint8Array) => 0,
+      flush: () => new Promise<number>(() => {}),
+    };
+    const readable = new ReadableStream<Uint8Array>();
+    const client = new DapClient(TEST_ADAPTER, "/tmp", proc, Promise.resolve(""), {
+      readable,
+      writeSink,
+    });
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      const start = Date.now();
+      await expect(client.sendRequest("initialize", {}, undefined, 50)).rejects.toThrow(/timed out/i);
+      // Must respect the caller's timeoutMs, not the internal 30 s write cap.
+      expect(Date.now() - start).toBeLessThan(500);
+      // Real delay required: unhandledRejection events surface only on real
+      // event-loop turns after the rejection is queued; fake timers cannot
+      // produce them, so deterministic clock control does not work here.
+      await Bun.sleep(50);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      // Let writeMessage's exit-guard resolve so no promise leaks past the test.
+      await client.dispose();
+      await Bun.sleep(20);
+    }
+  });
+
   it("isAlive returns true for fresh client", () => {
     const { client } = createClient();
     expect(client.isAlive()).toBe(true);

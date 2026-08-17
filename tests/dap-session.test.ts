@@ -15,6 +15,7 @@ class FakeDapClient {
   readonly proc: DapClientState["proc"];
   readonly exited = Promise.withResolvers<void>();
   readonly #handlers = new Map<string, Set<DapEventHandler>>();
+  readonly #reverseHandlers = new Map<string, (args: unknown) => unknown | Promise<unknown>>();
   #alive = true;
   #capabilities: DapCapabilities = { supportsConfigurationDoneRequest: true };
 
@@ -125,8 +126,17 @@ class FakeDapClient {
     return () => { handlers?.delete(handler); };
   }
 
-  onReverseRequest(): () => void {
-    return () => {};
+  onReverseRequest(command: string, handler: (args: unknown) => unknown | Promise<unknown>): () => void {
+    this.#reverseHandlers.set(command, handler);
+    return () => {
+      this.#reverseHandlers.delete(command);
+    };
+  }
+
+  async triggerReverse(command: string, args: unknown): Promise<unknown> {
+    const handler = this.#reverseHandlers.get(command);
+    if (!handler) throw new Error(`no reverse-request handler for ${command}`);
+    return handler(args);
   }
 
   isAlive(): boolean {
@@ -331,5 +341,53 @@ describe("DAP state inspection", () => {
     const threadResult = await manager.threads();
     expect(threadResult.threads).toHaveLength(1);
     expect(threadResult.threads[0].name).toBe("MainThread");
+  });
+});
+
+describe("DAP runInTerminal stdout drain", () => {
+  it("drains a runInTerminal debuggee's stdout into the session output buffer", async () => {
+    const manager = new DapSessionManager();
+    const fake = new FakeDapClient(TEST_ADAPTER, "/tmp", { stopAfterLaunch: true });
+    spyOn(DapClient, "spawn").mockResolvedValue(fake as unknown as DapClient);
+
+    await manager.launch({ adapter: TEST_ADAPTER, program: "/tmp/main.py", cwd: "/tmp" });
+
+    // Synthetic debuggee stdout: >64KB ahead of a unique terminal marker,
+    // then a trailing sentinel and EOF. The handler discards the Bun child
+    // after reading its PID, so the drain must consume this whole stream and
+    // route it to the session output — undrained, the marker never reaches
+    // the buffer. The sentinel after the marker guarantees the marker chunk
+    // is routed (in the read cycle before it) before `closed` resolves.
+    const marker = "__RUNINTERMINAL_MARKER__";
+    const enc = new TextEncoder();
+    const chunks = [enc.encode("x".repeat(128 * 1024)), enc.encode(`${marker}\n`), enc.encode("tail\n")];
+    let next = 0;
+    const closed = Promise.withResolvers<void>();
+    const stdout = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (next < chunks.length) {
+          controller.enqueue(chunks[next++]);
+        } else {
+          controller.close();
+          closed.resolve();
+        }
+      },
+    });
+    const spawnSpy = spyOn(Bun, "spawn").mockReturnValue({
+      pid: 4242,
+      stdout,
+      exited: Promise.resolve(0),
+    } as unknown as Bun.Subprocess<"pipe">);
+
+    await fake.triggerReverse("runInTerminal", { args: ["/usr/bin/debuggee", "--verbose"] });
+    // The stream reaching EOF proves the drain consumed it end to end; the
+    // marker (routed before close) is then present in the session output.
+    await closed.promise;
+
+    expect(spawnSpy).toHaveBeenCalledTimes(1);
+    expect(spawnSpy.mock.calls[0]?.[0]).toEqual(["/usr/bin/debuggee", "--verbose"]);
+    expect(manager.getOutput().output).toContain(marker);
+
+    await manager.terminate(undefined, 1_000);
   });
 });

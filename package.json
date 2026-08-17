@@ -1,6 +1,6 @@
 {
   "name": "@debugtalk/opencode-dap",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DAP (Debug Adapter Protocol) client for OpenCode AI coding agent",
   "license": "MIT",
   "author": "debugtalk",

@@ -1,6 +1,6 @@
 # opencode-dap
 
-DAP (Debug Adapter Protocol) client for OpenCode — ported from [oh-my-pi](https://github.com/can1357/oh-my-pi)'s DAP subsystem, with upstream robustness fixes and a working OpenCode plugin entry.
+**v0.3.0** — DAP (Debug Adapter Protocol) client for OpenCode — ported from [oh-my-pi](https://github.com/can1357/oh-my-pi)'s DAP subsystem, with upstream robustness fixes and a working OpenCode plugin entry. See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 Lets AI coding agents debug programs via the Debug Adapter Protocol — supports 14 debug adapters covering ~18 languages. Drop it into OpenCode with a single `plugin` entry or use it as a standalone Bun/Node library.
 
@@ -38,7 +38,7 @@ The GitHub-style spec makes OpenCode resolve and install the package from this r
 ### Local tarball / path
 
 ```bash
-npm pack            # produces debugtalk-opencode-dap-0.2.0.tgz
+npm pack            # produces debugtalk-opencode-dap-0.3.0.tgz
 ```
 
 Then point `opencode.json` at the packed directory (or a checkout):
@@ -137,7 +137,7 @@ To build a custom tool, import `DapSessionManager`, `selectLaunchAdapter`, etc. 
 | `gdb` | C, C++, Rust | `gdb -i dap` | system package |
 | `lldb-dap` | C, C++, ObjC, Swift, Rust, Zig | `lldb-dap` | `brew install llvm` (macOS), `apt install lldb` |
 | `codelldb` | C, C++, Rust, Zig | `codelldb` | VS Code extension |
-| `debugpy` | Python | `python -m debugpy.adapter` | `pip install debugpy` |
+| `debugpy` | Python | `debugpy-adapter` | `pip install debugpy` (provides the `debugpy-adapter` binary) |
 | `dlv` | Go | `dlv dap` | `go install github.com/go-delve/delve/cmd/dlv@latest` |
 | `js-debug-adapter` | JavaScript, TypeScript | `js-debug-adapter` | `npm install -g @vscode/js-debug` |
 | `netcoredbg` | C#, F# | `netcoredbg --interpreter=vscode` | [GitHub](https://github.com/Samsung/netcoredbg) |

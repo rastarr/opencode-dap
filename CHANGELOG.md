@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to this fork of opencode-dap. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); the fork adds fixes on top of upstream `debugtalk/opencode-dap` v0.2.0.
+All notable changes to this fork of opencode-dap. Format follows [Keep a Changelog](https://keepachangelog.com/); the fork adds fixes on top of upstream `debugtalk/opencode-dap` v0.2.0.
 
-## [Unreleased] — fork `main`
+## [0.3.0] — 2026-08-17
 
 ### Fixed
 
@@ -33,6 +33,14 @@ All notable changes to this fork of opencode-dap. Format loosely follows [Keep a
   the session output buffer, bounded at 128 KiB. Previously the unconsumed
   pipe buffered unboundedly in-process (measured ~9x RSS growth for a 200 MB
   output child) and the program's output was lost.
+- **debugpy adapter uses the `debugpy-adapter` binary** instead of
+  `python -m debugpy.adapter` — the module form fails on NixOS and other
+  systems where `python` and the debugpy package are separate Nix store
+  paths (the module is not importable from the profile interpreter even
+  though `debugpy-adapter` is on `PATH`). The console-script binary is
+  installed by `pip install debugpy` on every platform, so this is strictly
+  more portable. Verified end-to-end on NixOS: launch → continue → output
+  capture → terminate.
 
 ### Added
 
@@ -42,6 +50,17 @@ All notable changes to this fork of opencode-dap. Format loosely follows [Keep a
   entry contract (default export shape + hooks registration).
 - `socketReadyTimeoutMs` test hook on `DapClient.spawn` so socket-spawn
   tests do not wait the full 10 s cap.
+- README: fork notice, requirements table (OpenCode ≥ 1.18, Bun ≥ 1.3.14,
+  host-provided `@opencode-ai/plugin`), GitHub-spec install, deterministic
+  serve-based verification, safety documentation, `Plugin export is not a
+  function` troubleshooting entry.
+- CHANGELOG with fork release history and upstream provenance.
+
+### Changed
+
+- Version bumped to 0.3.0 (fork's first release; upstream was 0.2.0).
+- Adapter table: debugpy install remains `pip install debugpy` (provides
+  the `debugpy-adapter` binary).
 
 ## [0.2.0] — 2026-06-29 (upstream)
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Plugin entry contract: `src/index.ts` now default-exports the OpenCode v1
+  plugin module (`{ id, server }`). The previous `export *` barrel leaked
+  `debugTool` as a named export, which the OpenCode plugin loader rejects
+  with "Plugin export is not a function" — the plugin never registered.
+  Verified live against `opencode serve` (`/experimental/tool/ids` contains
+  `debug`).
+
 ## [0.2.0] — 2026-06-29
 
 ### Added

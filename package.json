@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "check": "tsc --noEmit",
-    "check:syntax": "bun --check src/client.ts src/config.ts src/session.ts src/types.ts src/non-interactive-env.ts src/plugin.ts src/index.ts tests/helpers.ts tests/dap-launch-failures.test.ts tests/dap-config.test.ts tests/dap-write-sink-flush.typecheck.ts tests/dap-client.test.ts tests/dap-session.test.ts tests/dap-comparison.test.ts",
+    "check:syntax": "bun --check src/client.ts src/config.ts src/session.ts src/types.ts src/non-interactive-env.ts src/plugin.ts src/index.ts tests/helpers.ts tests/dap-launch-failures.test.ts tests/dap-config.test.ts tests/dap-write-sink-flush.typecheck.ts tests/dap-client.test.ts tests/dap-session.test.ts tests/dap-plugin-entry.test.ts tests/dap-comparison.test.ts",
     "test": "bun test tests/"
   },
   "keywords": [

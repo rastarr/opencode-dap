@@ -139,6 +139,10 @@ class FakeDapClient {
     return handler(args);
   }
 
+  emitOutput(category: string, output: string): void {
+    this.#emit("output", { category, output });
+  }
+
   isAlive(): boolean {
     return this.#alive;
   }
@@ -344,8 +348,30 @@ describe("DAP state inspection", () => {
   });
 });
 
-describe("DAP runInTerminal stdout drain", () => {
-  it("drains a runInTerminal debuggee's stdout into the session output buffer", async () => {
+describe("DAP output capture", () => {
+  it("drops telemetry output events but keeps debuggee stdout", async () => {
+    const manager = new DapSessionManager();
+    const fake = new FakeDapClient(TEST_ADAPTER, "/tmp", { stopAfterLaunch: true });
+    spyOn(DapClient, "spawn").mockResolvedValue(fake as unknown as DapClient);
+
+    await manager.launch({ adapter: TEST_ADAPTER, program: "/tmp/main.py", cwd: "/tmp" });
+
+    // debugpy emits telemetry markers ("ptvsd"/"debugpy") on session start;
+    // they must not pollute the captured output buffer.
+    fake.emitOutput("telemetry", "ptvsd");
+    fake.emitOutput("telemetry", "debugpy");
+    fake.emitOutput("stdout", "result: {'alice': 125.0}\n");
+
+    const output = manager.getOutput().output;
+    expect(output).not.toContain("ptvsd");
+    expect(output).not.toContain("debugpy");
+    expect(output).toContain("result: {'alice': 125.0}");
+
+    await manager.terminate(undefined, 1_000);
+  });
+});
+
+describe("DAP runInTerminal stdout drain", () => {  it("drains a runInTerminal debuggee's stdout into the session output buffer", async () => {
     const manager = new DapSessionManager();
     const fake = new FakeDapClient(TEST_ADAPTER, "/tmp", { stopAfterLaunch: true });
     spyOn(DapClient, "spawn").mockResolvedValue(fake as unknown as DapClient);

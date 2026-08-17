@@ -1172,7 +1172,12 @@ export class DapSessionManager {
 			return {};
 		});
 		client.onEvent("output", body => {
-			truncateOutput(session, (body as DapOutputEventBody | undefined)?.output ?? "");
+			const outputEvent = body as DapOutputEventBody | undefined;
+			// Drop telemetry events (e.g. debugpy's "ptvsd"/"debugpy" markers):
+			// they are adapter-internal markers, not debuggee output, and would
+			// otherwise pollute the captured output buffer.
+			if (outputEvent?.category === "telemetry") return;
+			truncateOutput(session, outputEvent?.output ?? "");
 		});
 		client.onEvent("initialized", () => {
 			session.initializedSeen = true;

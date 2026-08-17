@@ -2,6 +2,18 @@
 
 All notable changes to this fork of opencode-dap. Format follows [Keep a Changelog](https://keepachangelog.com/); the fork adds fixes on top of upstream `debugtalk/opencode-dap` v0.2.0.
 
+## [0.3.1] — 2026-08-17
+
+### Fixed
+
+- **SIGTTIN suspension** — adapters now spawn detached (`setsid`), matching
+  OMP's `ptree.spawn(..., { detached: true })`. Without it the adapter and
+  its debuggee children inherited the harness's controlling terminal; a
+  debuggee touching `/dev/tty` triggered SIGTTIN and suspended the entire
+  OpenCode process under shell job control (`zsh: suspended (tty input)`).
+  Verified: a debuggee opening `/dev/tty` now gets `[Errno 6] No such
+  device or address` and runs to completion.
+
 ## [0.3.0] — 2026-08-17
 
 ### Fixed

@@ -170,6 +170,12 @@ async function spawnProc(command: string[], opts: { cwd: string; env: Record<str
 		stdin: "pipe",
 		stderr: "pipe",
 		env: opts.env,
+		// Start the adapter in a new session (setsid) so the adapter and its
+		// debuggee children have no controlling terminal. Without this,
+		// debuggee children can reach /dev/tty and trigger SIGTTIN, suspending
+		// the parent harness under shell job control (mirrors OMP's
+		// ptree.spawn(..., { detached: true })).
+		detached: true,
 	});
 
 	const readStderr = async (): Promise<string> => {

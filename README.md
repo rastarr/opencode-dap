@@ -1,42 +1,67 @@
 # opencode-dap
 
-DAP (Debug Adapter Protocol) client for OpenCode — ported from [oh-my-pi](https://github.com/anomalyco/oh-my-pi).
+DAP (Debug Adapter Protocol) client for OpenCode — ported from [oh-my-pi](https://github.com/can1357/oh-my-pi)'s DAP subsystem, with upstream robustness fixes and a working OpenCode plugin entry.
 
 Lets AI coding agents debug programs via the Debug Adapter Protocol — supports 14 debug adapters covering ~18 languages. Drop it into OpenCode with a single `plugin` entry or use it as a standalone Bun/Node library.
 
-## Quick Start
+> **Fork notice**: this is a maintained fork of [debugtalk/opencode-dap](https://github.com/debugtalk/opencode-dap) (dormant upstream). It adds:
+>
+> - **Plugin entry fix** — the upstream package never loads in OpenCode: its entry module exports a tool object, which OpenCode's plugin loader rejects with `Plugin export is not a function`. This fork default-exports the v1 plugin module (`{ id, server }`) the loader requires.
+> - **OMP robustness fixes** — ported from upstream oh-my-pi commits: bounded DAP writes (no infinite hang on a wedged adapter stdin), unix-socket connect rejection/bound (no infinite hang or leaked adapter on a dead socket), and `runInTerminal` stdout draining (no unbounded memory growth from a chatty debuggee).
+>
+> See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
-```bash
-opencode plugin @debugtalk/opencode-dap
-```
+## Requirements
 
-Restart OpenCode. The `debug` tool is available with 30+ actions. Debug sessions are automatically cleaned up on session idle/deleted.
+| Requirement | Version | Notes |
+|---|---|---|
+| OpenCode | ≥ 1.18 (any version whose loader accepts v1 plugin modules — the contract has been stable since 2026-03) | The `debug` tool registers through the standard plugin system |
+| Bun | ≥ 1.3.14 | Runtime for the plugin code and the standalone library |
+| `@opencode-ai/plugin` | peer dependency — provided by the OpenCode host | Do not install a conflicting version into your project |
 
-### Upgrade
+The package itself ships **zero runtime dependencies**; it relies on Bun built-ins and the plugin SDK the OpenCode host injects.
 
-```bash
-opencode plugin @debugtalk/opencode-dap --force
-```
+## Install
 
-### Verify
+### From this fork (recommended)
 
-```bash
-grep "opencode-dap" ~/.local/share/opencode/log/opencode.log
-```
-
-Then in OpenCode, run `debug action=sessions` to confirm the tool is registered.
-
-### Manual install (not recommended)
-
-```bash
-npm install @debugtalk/opencode-dap --save-dev
-```
-
-Then add to `opencode.json`:
+Add to `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
 
 ```json
-{ "plugin": ["@debugtalk/opencode-dap"] }
+{
+  "plugin": ["rastarr/opencode-dap"]
+}
 ```
+
+The GitHub-style spec makes OpenCode resolve and install the package from this repository. Restart OpenCode — the `debug` tool is available with 30+ actions.
+
+### Local tarball / path
+
+```bash
+npm pack            # produces debugtalk-opencode-dap-0.2.0.tgz
+```
+
+Then point `opencode.json` at the packed directory (or a checkout):
+
+```json
+{
+  "plugin": ["/path/to/opencode-dap"]
+}
+```
+
+### Standalone library
+
+```bash
+npm install rastarr/opencode-dap
+```
+
+The installed package keeps its npm name, so import from `@debugtalk/opencode-dap` (resolved from this fork, not the upstream npm registry):
+
+```ts
+import { DapSessionManager, selectLaunchAdapter } from "@debugtalk/opencode-dap";
+```
+
+> Note: do **not** install the upstream `@debugtalk/opencode-dap` npm package — its plugin entry is broken and it does not contain the fixes in this fork.
 
 ### Install debug adapters
 
@@ -48,12 +73,36 @@ npm install -g @vscode/js-debug      # JavaScript / TypeScript
 npm install -g @vscode/bash-debug    # Bash / Shell
 ```
 
+## Verify
+
+### 1. The plugin loads (no `Plugin export is not a function`)
+
+```bash
+opencode serve --port 4599 &
+curl -s http://127.0.0.1:4599/experimental/tool/ids | grep debug
+```
+
+`debug` present in the JSON array means the plugin registered. This is the same deterministic check used to validate this fork (it does not depend on a model invoking the tool).
+
+### 2. The tool works end-to-end
+
+In an OpenCode session, run `debug action=sessions` to confirm the tool is registered, then launch a program:
+
+```
+debug action=launch program=src/main.py adapter=debugpy
+debug action=continue
+debug action=output
+debug action=terminate
+```
+
+Debug sessions are automatically cleaned up on session idle/deleted.
+
 ## Standalone API
 
 For use outside OpenCode or when building custom integrations:
 
 ```ts
-import { DapSessionManager, selectLaunchAdapter } from "@debugtalk/opencode-dap";
+import { DapSessionManager, selectLaunchAdapter } from "opencode-dap";
 
 const cwd = process.cwd();
 const adapter = selectLaunchAdapter("src/main.py", cwd);
@@ -79,7 +128,7 @@ console.log("myVar =", result.evaluation.result);
 await mgr.terminate();
 ```
 
-To build a custom tool, import `DapSessionManager`, `selectLaunchAdapter`, etc. from the library. See [src/plugin.ts](https://github.com/debugtalk/opencode-dap/blob/main/src/plugin.ts) for the reference implementation.
+To build a custom tool, import `DapSessionManager`, `selectLaunchAdapter`, etc. from the library. See [src/plugin.ts](src/plugin.ts) for the reference implementation.
 
 ## Supported Adapters
 
@@ -189,7 +238,7 @@ Stateful orchestrator. Holds a single active session at a time.
 ```
 ┌─────────────────────────────────────────────────────┐
 │ opencode plugin (opencode.json)                     │
-│   "plugin": ["@debugtalk/opencode-dap"]             │
+│   "plugin": ["rastarr/opencode-dap"]                │
 └──────────────────┬──────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────┐
@@ -231,10 +280,17 @@ Messages are typed as `request`, `response`, or `event`. Requests are matched to
 
 - **Non-interactive environment**: All debugger child processes inherit `TERM=dumb`, disabled pagers, and CI flags to prevent SIGTTIN.
 - **Request timeout**: Every DAP request times out at 30s by default.
+- **Bounded writes**: Adapter writes are raced against a 30s cap and adapter exit — a wedged adapter stdin cannot hang the client forever, and the client disposes itself on failure.
+- **Socket connect hardening**: Unix-socket connects reject on failure (ECONNREFUSED/ENOENT/EACCES) and are bounded; adapter processes are killed when the socket never appears, so nothing leaks.
+- **Bounded debuggee output**: `runInTerminal` child stdout is drained into a 128 KiB session buffer — no unbounded memory growth, and the program's output is surfaced to the agent.
 - **Breakpoint serialization**: Concurrent breakpoint mutations are queued to prevent `setBreakpoints` from silently overwriting each other.
 - **Race-condition safety**: Event subscriptions are registered before sending commands that trigger them.
 
 ## Troubleshooting
+
+### "Plugin export is not a function"
+
+You are loading the upstream `@debugtalk/opencode-dap` package (or an old checkout). Its entry module leaks a tool object, which OpenCode's plugin loader rejects. Install this fork instead (see [Install](#install)); the loader error means the plugin did not register.
 
 ### "No debug adapter available for this program"
 

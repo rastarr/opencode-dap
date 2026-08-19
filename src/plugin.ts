@@ -333,6 +333,8 @@ function formatSessions(sessions: DapSessionSummary[]): string {
 const debugTool = tool({
   description: `Debug a program using the Debug Adapter Protocol (DAP).
 
+When to use: reach for this tool when the failure is reproducible, process-local, and the unknown is runtime state, call stack, or control flow — it observes directly with zero code changes, and direct observation outweighs log/trace reconstruction. Prefer it over adding instrumentation or guessing from logs. Use logging/tracing instead when the failure is intermittent, timing- or race-sensitive, spans processes, or is production-only.
+
 Supports 14 debug adapters: gdb, lldb-dap, codelldb, debugpy (Python), dlv (Go),
 js-debug-adapter (JS/TS), netcoredbg (C#), kotlin-debug-adapter, rdbg (Ruby),
 php-debug-adapter, bash-debug-adapter, dart-debug-adapter, flutter-debug-adapter,

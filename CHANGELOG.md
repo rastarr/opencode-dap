@@ -2,6 +2,19 @@
 
 All notable changes to this fork of opencode-dap. Format follows [Keep a Changelog](https://keepachangelog.com/); the fork adds fixes on top of upstream `debugtalk/opencode-dap` v0.2.0.
 
+## [0.3.4] — 2026-08-20
+
+### Fixed
+
+- **"When to use" trigger now actually ships** — the v0.3.3 decision trigger
+  lived only in `prompts/tools/debug.md`, which is never read at runtime
+  (OpenCode's plugin API takes the tool description inline; the prompts dir
+  is vestigial from the OMP port) and was excluded from the package anyway
+  (the `files` whitelist shipped only `src/`, `README.md`, `LICENSE`). The
+  trigger is now embedded in the `debugTool` description in `src/plugin.ts`,
+  the text the model actually receives, and `prompts/` is added to the
+  `files` whitelist so repo and package stay consistent.
+
 ## [0.3.3] — 2026-08-20
 
 ### Changed

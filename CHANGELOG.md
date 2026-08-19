@@ -2,6 +2,32 @@
 
 All notable changes to this fork of opencode-dap. Format follows [Keep a Changelog](https://keepachangelog.com/); the fork adds fixes on top of upstream `debugtalk/opencode-dap` v0.2.0.
 
+## [0.3.3] — 2026-08-20
+
+### Changed
+
+- **Decision trigger for `debug` in agent skills** — `prompts/tools/debug.md`
+  gains a "When to use" block: prefer `debug` when the failure is
+  reproducible, process-local, and the unknown is runtime state, call stack,
+  or control flow — direct observation beats log/trace reconstruction; use
+  logging/tracing instead for intermittent, timing/race-sensitive,
+  cross-process, or production-only failures. Companion edits to
+  `debug-trace-instrumentation`, `root-cause-analysis`, and
+  `test-first-repair` skills make the tool the first move at their decision
+  points instead of unnamed "debugger inspection".
+
+## [0.3.2] — 2026-08-17
+
+### Fixed
+
+- **Telemetry output noise** — debugpy emits two telemetry output events on
+  session start (`{"category": "telemetry", "output": "ptvsd"}` and
+  `"debugpy"`); the handler appended every output event verbatim, so the
+  captured-output buffer began with `ptvsddebugpy` before the debuggee's real
+  stdout. Filter by category: keep stdout/stderr/console/important, drop
+  telemetry. The useful content (debuggee stdout, traceback) is captured
+  intact.
+
 ## [0.3.1] — 2026-08-17
 
 ### Fixed

@@ -1,6 +1,8 @@
 Provides debugger access through the Debug Adapter Protocol (DAP).
 Use for launching or attaching debuggers, setting breakpoints, stepping through execution, inspecting threads/stack/variables, evaluating expressions, capturing output, and interrupting hung programs.
 
+When to use: reach for `debug` when the failure is reproducible, process-local, and the unknown is runtime state, call stack, or control flow — it observes directly with zero code changes, and direct observation outweighs log/trace reconstruction. Prefer it over adding instrumentation or guessing from logs. Use logging/tracing instead when the failure is intermittent, timing- or race-sensitive, spans processes, or is production-only.
+
 <instruction>
 - You SHOULD prefer this tool over bash for program state, breakpoints, stepping, thread inspection, or interrupting a running process.
 - `action: "launch"` starts a session; `program` is required, `adapter` optional (auto-selected from target path and workspace).

@@ -13,6 +13,18 @@
 }
 ```
 
+## Fork 发布流程（本仓库）
+
+本 fork 不发布到 npm；`package.json` 版本号只用于标识。发布 = 以下全部步骤：
+
+1. 更新 `CHANGELOG.md`（Keep a Changelog 格式，顶部加新版本条目）
+2. `package.json` 版本号 bump
+3. 提交 + push 到 `main`
+4. **打 tag**：`git tag v<version> && git push origin v<version>`
+5. **建 GitHub release**：`gh release create v<version> --title "v<version>" --notes "..."`
+
+步骤 4-5 常被遗漏（曾两次只 push 了 commit，release 页仍显示旧版本）。
+
 ## 发布前
 
 ```bash
